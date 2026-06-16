@@ -47,6 +47,107 @@ class ProgressDialog(ctk.CTkToplevel):
         ctk.CTkLabel(self, text="Операция выполняется локально").pack(pady=10)
 
 
+class ChangesReviewDialog(ctk.CTkToplevel):
+    def __init__(self, parent, preview: dict):
+        super().__init__(parent)
+        self.confirmed = False
+        self.title("Проверка изменений")
+        self.geometry("760x620")
+        self.minsize(680, 520)
+        self.transient(parent)
+        self.grab_set()
+        self.configure(fg_color="#F4F4F0")
+
+        ctk.CTkLabel(
+            self,
+            text="Проверка изменений",
+            font=ctk.CTkFont(size=28, weight="bold"),
+            text_color="#16221C",
+        ).pack(anchor="w", padx=28, pady=(26, 8))
+        ctk.CTkLabel(
+            self,
+            text=(
+                "Проверьте план замен перед выпуском копий. "
+                "Исходные документы не будут изменены."
+            ),
+            text_color="#607168",
+        ).pack(anchor="w", padx=28, pady=(0, 18))
+
+        summary = ctk.CTkFrame(self, fg_color="transparent")
+        summary.pack(fill="x", padx=28, pady=(0, 16))
+        for label, value in (
+            ("Документов", preview["documents"]),
+            ("Замен", preview["replacements"]),
+        ):
+            card = ctk.CTkFrame(summary, fg_color="#FFFFFF", corner_radius=14)
+            card.pack(side="left", fill="x", expand=True, padx=(0, 10))
+            ctk.CTkLabel(
+                card,
+                text=str(value),
+                font=ctk.CTkFont(size=26, weight="bold"),
+                text_color="#1E5942",
+            ).pack(anchor="w", padx=18, pady=(14, 0))
+            ctk.CTkLabel(card, text=label, text_color="#66736C").pack(
+                anchor="w", padx=18, pady=(0, 14)
+            )
+
+        text = ctk.CTkTextbox(
+            self,
+            corner_radius=14,
+            fg_color="#FFFFFF",
+            border_width=0,
+            wrap="word",
+            font=ctk.CTkFont(size=13),
+        )
+        text.pack(fill="both", expand=True, padx=28, pady=(0, 16))
+        for item in preview["items"]:
+            text.insert(
+                "end",
+                f"{item['title']}\n"
+                f"Источник: {item['source']}\n"
+                f"Всего замен: {item['replacement_count']}\n",
+            )
+            for replacement in item["replacements"]:
+                text.insert(
+                    "end",
+                    f"  {replacement['old']}  ->  {replacement['new']} "
+                    f"({replacement['count']} шт.)\n",
+                )
+            text.insert("end", "\n")
+        text.configure(state="disabled")
+
+        footer = ctk.CTkFrame(self, fg_color="transparent")
+        footer.pack(fill="x", padx=28, pady=(0, 24))
+        ctk.CTkButton(
+            footer,
+            text="Отклонить",
+            command=self._reject,
+            height=42,
+            corner_radius=12,
+            fg_color="#E7ECE8",
+            hover_color="#D8E0DA",
+            text_color="#16221C",
+        ).pack(side="left")
+        ctk.CTkButton(
+            footer,
+            text="Подтвердить выпуск копий",
+            command=self._confirm,
+            height=42,
+            corner_radius=12,
+            fg_color="#1E5942",
+            hover_color="#174A36",
+            text_color="#FFFFFF",
+        ).pack(side="right")
+
+    def _confirm(self) -> None:
+        self.confirmed = True
+        self.destroy()
+
+    def _reject(self) -> None:
+        self.confirmed = False
+        self.destroy()
+
+
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -279,21 +380,9 @@ class App(ctk.CTk):
                 "Подтвержденных замен для DOCX-документов не найдено.",
             )
             return
-        document_lines = "\n".join(
-            f"- {item['title']}: {item['replacement_count']} замен"
-            for item in preview["items"][:10]
-        )
-        if len(preview["items"]) > 10:
-            document_lines += f"\n- еще документов: {len(preview['items']) - 10}"
-        confirmed = messagebox.askyesno(
-            "Подтвердить изменения",
-            "Будут созданы исправленные копии. Исходные документы не изменяются.\n\n"
-            f"Документов: {preview['documents']}\n"
-            f"Замен: {preview['replacements']}\n\n"
-            f"{document_lines}\n\n"
-            "Применить эти изменения?",
-        )
-        if not confirmed:
+        dialog = ChangesReviewDialog(self, preview)
+        self.wait_window(dialog)
+        if not dialog.confirmed:
             self.status.configure(text="Изменения отменены пользователем")
             return
         self.run_task(

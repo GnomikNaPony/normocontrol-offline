@@ -52,6 +52,23 @@ def make_docx_with_text(path: Path, *paragraphs: str) -> None:
         archive.writestr("word/document.xml", document_xml)
 
 
+def make_split_reference_docx(path: Path) -> None:
+    document_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:r><w:t>Ссылка ГОСТ Р </w:t></w:r>
+      <w:r><w:rPr><w:b/></w:rPr><w:t>2.105</w:t></w:r>
+      <w:r><w:t>-2019 действует.</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>
+"""
+    with ZipFile(path, "w") as archive:
+        archive.writestr("[Content_Types].xml", CONTENT_TYPES)
+        archive.writestr("word/document.xml", document_xml)
+
+
 class CoreTests(unittest.TestCase):
     def test_docx_extraction_and_annotations(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -74,6 +91,18 @@ class CoreTests(unittest.TestCase):
             source = Path(directory) / "source.docx"
             target = Path(directory) / "target.docx"
             make_docx(source)
+            count = replace_in_docx(
+                source, target, [("ГОСТ Р 2.105-2019", "ГОСТ Р 2.105-2025")]
+            )
+            result = extract_document(target)
+        self.assertEqual(count, 1)
+        self.assertIn("ГОСТ Р 2.105-2025", result.text)
+
+    def test_split_run_docx_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.docx"
+            target = Path(directory) / "target.docx"
+            make_split_reference_docx(source)
             count = replace_in_docx(
                 source, target, [("ГОСТ Р 2.105-2019", "ГОСТ Р 2.105-2025")]
             )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 
 from .db import Database
@@ -23,6 +24,10 @@ def analyze_all(db: Database) -> int:
 
 
 def analyze_document(db: Database, document_id: int) -> int:
+    document = db.rows(
+        "SELECT title, extension, metadata_json FROM documents WHERE id = ?",
+        (document_id,),
+    )[0]
     paragraphs = db.rows(
         """
         SELECT paragraph_index, text
@@ -44,6 +49,7 @@ def analyze_document(db: Database, document_id: int) -> int:
         """
     )
     findings: list[dict] = []
+    findings.extend(_structure_findings(document))
     for row in paragraphs:
         index = int(row["paragraph_index"])
         text = row["text"]
@@ -109,3 +115,104 @@ def analyze_document(db: Database, document_id: int) -> int:
 
     db.add_findings(document_id, findings)
     return len(findings)
+
+
+def _structure_findings(document) -> list[dict]:
+    try:
+        metadata = json.loads(document["metadata_json"] or "{}")
+    except json.JSONDecodeError:
+        metadata = {}
+    findings: list[dict] = []
+    if metadata.get("ocr") == "tesseract":
+        findings.append(
+            {
+                "paragraph_index": None,
+                "category": "ocr_review",
+                "severity": "review",
+                "message": "Документ получен через OCR; текст нужно проверить человеком",
+                "original": document["title"],
+                "suggestion": "Сверить распознанный текст со сканом перед формированием правил",
+            }
+        )
+    if document["extension"] != ".docx":
+        return findings
+    structure_raw = metadata.get("structure_json")
+    if not structure_raw:
+        return findings
+    try:
+        structure = json.loads(structure_raw)
+    except json.JSONDecodeError:
+        return findings
+    checks = (
+        (
+            "style",
+            "review",
+            "Есть длинные абзацы без явного стиля Word",
+            "styleless_long_paragraphs",
+            "Проверить применение стилей документа",
+        ),
+        (
+            "numbering",
+            "medium",
+            "Есть похожая на ручную автоматическая нумерация",
+            "manual_numbering_paragraphs",
+            "Проверить, используется ли авто-нумерация Word",
+        ),
+        (
+            "table",
+            "medium",
+            "Есть таблицы без строк",
+            "tables_without_rows",
+            "Проверить структуру таблиц",
+        ),
+        (
+            "layout",
+            "review",
+            "Есть разделы без явных полей страницы",
+            "sections_without_margins",
+            "Проверить поля и параметры страницы",
+        ),
+        (
+            "caption",
+            "review",
+            "Есть рисунки/объекты без подписи в том же абзаце",
+            "drawings_without_inline_caption",
+            "Проверить подписи рисунков, схем и таблиц",
+        ),
+    )
+    for category, severity, message, key, suggestion in checks:
+        count = int(structure.get(key, 0) or 0)
+        if count:
+            findings.append(
+                {
+                    "paragraph_index": None,
+                    "category": category,
+                    "severity": severity,
+                    "message": message,
+                    "original": f"{count} шт.",
+                    "suggestion": suggestion,
+                }
+            )
+    if int(structure.get("fields", 0) or 0) == 0:
+        findings.append(
+            {
+                "paragraph_index": None,
+                "category": "fields",
+                "severity": "review",
+                "message": "В DOCX не найдены поля Word",
+                "original": "0 полей",
+                "suggestion": "Проверить содержание, номера страниц, ссылки и автоматические поля",
+            }
+        )
+    if int(structure.get("header_footer_paragraphs", 0) or 0) == 0:
+        findings.append(
+            {
+                "paragraph_index": None,
+                "category": "headers",
+                "severity": "review",
+                "message": "Не найдены колонтитулы Word",
+                "original": "0 абзацев в header/footer",
+                "suggestion": "Проверить наличие и оформление колонтитулов",
+            }
+        )
+    return findings

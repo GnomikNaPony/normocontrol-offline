@@ -3,12 +3,17 @@ from __future__ import annotations
 from datetime import datetime
 import shutil
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from .db import Database
 
+
+W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+W = f"{{{W_NS}}}"
+ET.register_namespace("w", W_NS)
 
 EDITABLE_WORD_PARTS = (
     "word/document.xml",
@@ -123,14 +128,9 @@ def replace_in_docx_detailed(
             for item in input_archive.infolist():
                 data = input_archive.read(item.filename)
                 if item.filename.startswith("word/") and item.filename.endswith(".xml"):
-                    for old_value, new_value in mappings:
-                        old = escape(old_value).encode("utf-8")
-                        new = escape(new_value).encode("utf-8")
-                        count = data.count(old)
-                        if count:
-                            data = data.replace(old, new)
-                            key = (old_value, new_value)
-                            replacement_counts[key] = replacement_counts.get(key, 0) + count
+                    data, counts = _replace_xml_bytes(data, mappings)
+                    for key, count in counts.items():
+                        replacement_counts[key] = replacement_counts.get(key, 0) + count
                 output_archive.writestr(item, data)
         if replacement_counts:
             shutil.move(temporary_path, target)
@@ -156,11 +156,9 @@ def count_docx_replacements(
             if not (item.filename.startswith("word/") and item.filename.endswith(".xml")):
                 continue
             data = archive.read(item.filename)
-            for old_value, new_value in mappings:
-                count = data.count(escape(old_value).encode("utf-8"))
-                if count:
-                    key = (old_value, new_value)
-                    replacement_counts[key] = replacement_counts.get(key, 0) + count
+            counts = _count_xml_replacements(data, mappings)
+            for key, count in counts.items():
+                replacement_counts[key] = replacement_counts.get(key, 0) + count
     return [
         {"old": old, "new": new, "count": count}
         for (old, new), count in sorted(replacement_counts.items())
@@ -241,3 +239,68 @@ def _markdown_file_link(path: Path) -> str:
 
 def _table_text(value: str) -> str:
     return value.replace("|", "\\|").replace("\n", " ")
+
+
+def _replace_xml_bytes(
+    data: bytes, mappings: list[tuple[str, str]]
+) -> tuple[bytes, dict[tuple[str, str], int]]:
+    counts: dict[tuple[str, str], int] = {}
+    for old_value, new_value in mappings:
+        old = escape(old_value).encode("utf-8")
+        new = escape(new_value).encode("utf-8")
+        count = data.count(old)
+        if count:
+            data = data.replace(old, new)
+            counts[(old_value, new_value)] = counts.get((old_value, new_value), 0) + count
+    split_data, split_counts = _replace_split_text_nodes(data, mappings)
+    for key, count in split_counts.items():
+        counts[key] = counts.get(key, 0) + count
+    return split_data, counts
+
+
+def _count_xml_replacements(
+    data: bytes, mappings: list[tuple[str, str]]
+) -> dict[tuple[str, str], int]:
+    counts: dict[tuple[str, str], int] = {}
+    direct_data = data
+    for old_value, new_value in mappings:
+        old = escape(old_value).encode("utf-8")
+        count = direct_data.count(old)
+        if count:
+            counts[(old_value, new_value)] = counts.get((old_value, new_value), 0) + count
+            direct_data = direct_data.replace(old, escape(new_value).encode("utf-8"))
+    _, split_counts = _replace_split_text_nodes(direct_data, mappings)
+    for key, count in split_counts.items():
+        counts[key] = counts.get(key, 0) + count
+    return counts
+
+
+def _replace_split_text_nodes(
+    data: bytes, mappings: list[tuple[str, str]]
+) -> tuple[bytes, dict[tuple[str, str], int]]:
+    try:
+        root = ET.fromstring(data)
+    except ET.ParseError:
+        return data, {}
+    counts: dict[tuple[str, str], int] = {}
+    changed = False
+    for paragraph in root.iter(W + "p"):
+        nodes = [node for node in paragraph.iter(W + "t")]
+        if len(nodes) < 2:
+            continue
+        combined = "".join(node.text or "" for node in nodes)
+        updated = combined
+        for old_value, new_value in mappings:
+            count = updated.count(old_value)
+            if count:
+                updated = updated.replace(old_value, new_value)
+                key = (old_value, new_value)
+                counts[key] = counts.get(key, 0) + count
+        if updated != combined:
+            nodes[0].text = updated
+            for node in nodes[1:]:
+                node.text = ""
+            changed = True
+    if not changed:
+        return data, {}
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True), counts

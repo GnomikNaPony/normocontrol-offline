@@ -15,6 +15,8 @@
   выбор локальных моделей.
 - [normocontrol_offline/docs/CROSS_PLATFORM.md](normocontrol_offline/docs/CROSS_PLATFORM.md)
   - проверка работы на macOS/Windows/Linux.
+- [normocontrol_offline/docs/LIMITATIONS_RESOLUTION.md](normocontrol_offline/docs/LIMITATIONS_RESOLUTION.md)
+  - как закрываются текущие ограничения и где требуется решение человека.
 
 Быстрый запуск:
 

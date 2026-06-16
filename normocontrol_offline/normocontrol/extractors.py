@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -15,6 +16,8 @@ W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 ODT_TEXT_NS = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
 W = f"{{{W_NS}}}"
 ODT_TEXT = f"{{{ODT_TEXT_NS}}}"
+CAPTION_START = re.compile(r"^(?:рисунок|таблица|схема|приложение)\s+[\dА-ЯA-Z]", re.IGNORECASE)
+MANUAL_NUMBERING = re.compile(r"^\s*(?:\d+(?:\.\d+)*|[а-яА-Яa-zA-Z])[\).]\s+\S")
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 SUPPORTED_EXTENSIONS = {
@@ -115,6 +118,18 @@ def _annotation_kinds(run: ET.Element) -> list[str]:
 def _extract_docx(path: Path) -> ExtractedDocument:
     paragraphs: list[str] = []
     annotations: list[Annotation] = []
+    structure = {
+        "tables": 0,
+        "drawings": 0,
+        "fields": 0,
+        "header_footer_paragraphs": 0,
+        "styleless_long_paragraphs": 0,
+        "manual_numbering_paragraphs": 0,
+        "caption_like_paragraphs": 0,
+        "drawings_without_inline_caption": 0,
+        "tables_without_rows": 0,
+        "sections_without_margins": 0,
+    }
     try:
         with ZipFile(path) as archive:
             names = [
@@ -128,6 +143,17 @@ def _extract_docx(path: Path) -> ExtractedDocument:
             names.sort(key=lambda name: (name != "word/document.xml", name))
             for part_name in names:
                 root = ET.fromstring(archive.read(part_name))
+                is_header_footer = bool(re.fullmatch(r"word/(?:header|footer)\d+\.xml", part_name))
+                structure["tables"] += sum(1 for _ in root.iter(W + "tbl"))
+                structure["fields"] += sum(1 for _ in root.iter(W + "fldSimple"))
+                structure["fields"] += sum(1 for _ in root.iter(W + "instrText"))
+                structure["fields"] += sum(1 for _ in root.iter(W + "fldChar"))
+                for table in root.iter(W + "tbl"):
+                    if table.find(W + "tr") is None:
+                        structure["tables_without_rows"] += 1
+                for section in root.iter(W + "sectPr"):
+                    if section.find(W + "pgMar") is None:
+                        structure["sections_without_margins"] += 1
                 for paragraph in root.iter(W + "p"):
                     paragraph_index = len(paragraphs)
                     text_chunks: list[str] = []
@@ -141,9 +167,34 @@ def _extract_docx(path: Path) -> ExtractedDocument:
                                 )
                     text = "".join(text_chunks).strip()
                     if text:
-                        if (
+                        ppr = paragraph.find(W + "pPr")
+                        has_style = (
+                            ppr is not None and ppr.find(W + "pStyle") is not None
+                        )
+                        has_auto_numbering = (
+                            ppr is not None and ppr.find(W + "numPr") is not None
+                        )
+                        has_drawing = (
                             paragraph.find(".//" + W + "drawing") is not None
                             or paragraph.find(".//" + W + "pict") is not None
+                        )
+                        if is_header_footer:
+                            structure["header_footer_paragraphs"] += 1
+                            annotations.append(
+                                Annotation(paragraph_index, "header_footer", text)
+                            )
+                        if len(text) > 80 and not has_style:
+                            structure["styleless_long_paragraphs"] += 1
+                        if MANUAL_NUMBERING.match(text) and not has_auto_numbering:
+                            structure["manual_numbering_paragraphs"] += 1
+                        if CAPTION_START.match(text):
+                            structure["caption_like_paragraphs"] += 1
+                        if has_drawing:
+                            structure["drawings"] += 1
+                            if not CAPTION_START.match(text):
+                                structure["drawings_without_inline_caption"] += 1
+                        if (
+                            has_drawing
                         ):
                             annotations.append(
                                 Annotation(paragraph_index, "drawing_mark", text)
@@ -155,7 +206,7 @@ def _extract_docx(path: Path) -> ExtractedDocument:
         text="\n".join(paragraphs),
         paragraphs=paragraphs,
         annotations=annotations,
-        metadata={"format": "docx"},
+        metadata={"format": "docx", "structure_json": json.dumps(structure, ensure_ascii=False)},
     )
 
 
