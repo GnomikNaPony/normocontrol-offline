@@ -9,7 +9,13 @@ import customtkinter as ctk
 
 from .config import DEFAULT_DB
 from .db import Database
-from .service import add_mapping, import_source, run_analysis, run_corrections
+from .service import (
+    add_mapping,
+    import_source,
+    preview_corrections,
+    run_analysis,
+    run_corrections,
+)
 
 
 ctk.set_appearance_mode("light")
@@ -259,11 +265,36 @@ class App(ctk.CTk):
 
     def apply(self) -> None:
         output = filedialog.askdirectory(title="Папка для исправленных копий")
-        if output:
-            self.run_task(
+        if not output:
+            return
+        preview = preview_corrections(self.db)
+        if not preview["items"]:
+            messagebox.showinfo(
                 "Выпуск исправленных копий",
-                lambda: run_corrections(self.db, Path(output)),
+                "Подтвержденных замен для DOCX-документов не найдено.",
             )
+            return
+        document_lines = "\n".join(
+            f"- {item['title']}: {item['replacement_count']} замен"
+            for item in preview["items"][:10]
+        )
+        if len(preview["items"]) > 10:
+            document_lines += f"\n- еще документов: {len(preview['items']) - 10}"
+        confirmed = messagebox.askyesno(
+            "Подтвердить изменения",
+            "Будут созданы исправленные копии. Исходные документы не изменяются.\n\n"
+            f"Документов: {preview['documents']}\n"
+            f"Замен: {preview['replacements']}\n\n"
+            f"{document_lines}\n\n"
+            "Применить эти изменения?",
+        )
+        if not confirmed:
+            self.status.configure(text="Изменения отменены пользователем")
+            return
+        self.run_task(
+            "Выпуск исправленных копий",
+            lambda: run_corrections(self.db, Path(output), confirmed=True),
+        )
 
 
 def main() -> None:

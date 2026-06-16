@@ -52,7 +52,8 @@ python run.py
 - `Добавить материалы`: загрузить документы, стандарты, примеры или схемы.
 - `Проверить базу`: выполнить анализ и обновить список замечаний.
 - `Обновить ссылку`: указать старое и новое обозначение стандарта.
-- `Исправленные копии`: выпустить DOCX-копии с подтвержденными заменами ссылок.
+- `Исправленные копии`: показать план замен, запросить подтверждение и
+  выпустить DOCX-копии с отчетом `report_*.md`.
 
 ## Быстрая проверка через CLI
 
@@ -70,7 +71,8 @@ python -m normocontrol.cli --db data/base.sqlite3 findings
 
 ```bash
 python -m normocontrol.cli --db data/base.sqlite3 map "ГОСТ Р 2.105-2019" "ГОСТ Р 2.105-2025"
-python -m normocontrol.cli --db data/base.sqlite3 apply corrected
+python -m normocontrol.cli --db data/base.sqlite3 preview
+python -m normocontrol.cli --db data/base.sqlite3 apply corrected --confirm
 ```
 
 ## Локальная нейросеть

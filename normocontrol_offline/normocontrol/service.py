@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .analyzer import analyze_all
-from .corrections import apply_reference_mappings
+from .corrections import apply_reference_mappings, preview_reference_mappings
 from .db import Database
 from .extractors import (
     ExtractionError,
@@ -66,5 +66,9 @@ def run_learning(db: Database) -> dict[str, int]:
     return learn_from_examples(db)
 
 
-def run_corrections(db: Database, output_directory: Path):
-    return apply_reference_mappings(db, output_directory)
+def preview_corrections(db: Database) -> dict:
+    return preview_reference_mappings(db)
+
+
+def run_corrections(db: Database, output_directory: Path, confirmed: bool = False):
+    return apply_reference_mappings(db, output_directory, confirmed=confirmed)

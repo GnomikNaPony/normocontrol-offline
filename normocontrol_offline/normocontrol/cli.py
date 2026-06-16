@@ -8,6 +8,7 @@ from .db import Database
 from .service import (
     add_mapping,
     import_source,
+    preview_corrections,
     run_analysis,
     run_corrections,
     run_learning,
@@ -39,6 +40,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     apply_parser = subparsers.add_parser("apply")
     apply_parser.add_argument("output")
+    apply_parser.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Подтвердить применение изменений и выпуск исправленных копий",
+    )
+
+    subparsers.add_parser("preview")
 
     search_parser = subparsers.add_parser("search")
     search_parser.add_argument("query")
@@ -65,7 +73,14 @@ def main() -> None:
         add_mapping(db, arguments.old, arguments.new)
         result = {"mapping": f"{arguments.old} -> {arguments.new}"}
     elif arguments.command == "apply":
-        result = run_corrections(db, Path(arguments.output))
+        if arguments.confirm:
+            result = run_corrections(db, Path(arguments.output), confirmed=True)
+        else:
+            result = preview_corrections(db)
+            result["not_applied"] = True
+            result["message"] = "Изменения не применены. Повторите apply с --confirm."
+    elif arguments.command == "preview":
+        result = preview_corrections(db)
     elif arguments.command == "search":
         result = [
             dict(row)
