@@ -148,6 +148,55 @@ class ChangesReviewDialog(ctk.CTkToplevel):
         self.destroy()
 
 
+class MoreDialog(ctk.CTkToplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Еще")
+        self.geometry("430x330")
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        self.configure(fg_color="#F4F4F0")
+
+        ctk.CTkLabel(
+            self,
+            text="Дополнительно",
+            font=ctk.CTkFont(size=26, weight="bold"),
+            text_color="#16221C",
+        ).pack(anchor="w", padx=26, pady=(24, 8))
+        ctk.CTkLabel(
+            self,
+            text="Редкие действия вынесены сюда, чтобы основное окно не перегружалось.",
+            text_color="#607168",
+            wraplength=360,
+            justify="left",
+        ).pack(anchor="w", padx=26, pady=(0, 18))
+
+        actions = (
+            ("Выбрать или создать базу", parent.choose_database),
+            ("Обучить на примерах", parent.learn),
+            ("Обновить ссылку на стандарт", parent.map_reference),
+        )
+        for text, command in actions:
+            ctk.CTkButton(
+                self,
+                text=text,
+                command=lambda callback=command: self._run(callback),
+                height=44,
+                corner_radius=12,
+                fg_color="#FFFFFF",
+                hover_color="#E7ECE8",
+                text_color="#16221C",
+                border_width=1,
+                border_color="#D8E0DA",
+                font=ctk.CTkFont(size=14, weight="bold"),
+            ).pack(fill="x", padx=26, pady=(0, 10))
+
+    def _run(self, callback) -> None:
+        self.destroy()
+        callback()
+
+
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -169,24 +218,11 @@ class App(ctk.CTk):
             font=ctk.CTkFont(size=34, weight="bold"),
             text_color="#16221C",
         ).pack(side="left")
-        right = ctk.CTkFrame(header, fg_color="transparent")
-        right.pack(side="right")
-        ctk.CTkButton(
-            right,
-            text="База",
-            command=self.choose_database,
-            width=78,
-            height=34,
-            corner_radius=10,
-            fg_color="#E7ECE8",
-            hover_color="#D8E0DA",
-            text_color="#16221C",
-        ).pack(side="right", padx=(12, 0))
         self.status = ctk.CTkLabel(
-            right,
+            header,
             text=f"База: {self.db.path.name}",
             text_color="#607168",
-            width=320,
+            width=360,
             anchor="e",
         )
         self.status.pack(side="right")
@@ -194,11 +230,10 @@ class App(ctk.CTk):
         actions = ctk.CTkFrame(self, fg_color="transparent")
         actions.pack(fill="x", padx=32, pady=(0, 20))
         buttons = (
-            ("Добавить материалы", self.add_materials, "#E7ECE8", "#16221C"),
-            ("Обучить", self.learn, "#E7ECE8", "#16221C"),
-            ("Проверить базу", self.analyze, "#1E5942", "#FFFFFF"),
-            ("Обновить ссылку", self.map_reference, "#E7ECE8", "#16221C"),
-            ("Исправленные копии", self.apply, "#E7ECE8", "#16221C"),
+            ("Добавить", self.add_materials, "#E7ECE8", "#16221C"),
+            ("Проверить", self.analyze, "#1E5942", "#FFFFFF"),
+            ("Исправить", self.apply, "#E7ECE8", "#16221C"),
+            ("Еще", self.more, "#E7ECE8", "#16221C"),
         )
         for text, command, color, text_color in buttons:
             ctk.CTkButton(
@@ -300,6 +335,9 @@ class App(ctk.CTk):
         self.db = Database(Path(path))
         self.status.configure(text=f"База: {self.db.path.name}")
         self.refresh()
+
+    def more(self) -> None:
+        MoreDialog(self)
 
     def run_task(self, title: str, task) -> None:
         dialog = ProgressDialog(self, title)
