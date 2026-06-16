@@ -9,6 +9,7 @@ from .db import Database
 from .service import (
     add_mapping,
     import_source,
+    preview_corrections,
     run_analysis,
     run_corrections,
     run_learning,
@@ -153,9 +154,31 @@ class NormControlApp:
         output = filedialog.askdirectory(title="Папка для исправленных копий")
         if not output:
             return
+        preview = preview_corrections(self.database())
+        if not preview["items"]:
+            messagebox.showinfo(
+                "Исправление", "Подтвержденных замен для DOCX-документов не найдено."
+            )
+            return
+        document_lines = "\n".join(
+            f"- {item['title']}: {item['replacement_count']} замен"
+            for item in preview["items"][:10]
+        )
+        if len(preview["items"]) > 10:
+            document_lines += f"\n- еще документов: {len(preview['items']) - 10}"
+        if not messagebox.askyesno(
+            "Подтвердить изменения",
+            "Будут созданы исправленные копии. Исходные документы не изменяются.\n\n"
+            f"Документов: {preview['documents']}\n"
+            f"Замен: {preview['replacements']}\n\n"
+            f"{document_lines}\n\n"
+            "Применить эти изменения?",
+        ):
+            self.status.set("Изменения отменены пользователем")
+            return
         self._perform(
             "Исправление",
-            lambda: run_corrections(self.database(), Path(output)),
+            lambda: run_corrections(self.database(), Path(output), confirmed=True),
         )
 
     def search(self) -> None:

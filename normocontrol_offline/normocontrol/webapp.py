@@ -14,6 +14,7 @@ from .db import Database
 from .service import (
     add_mapping,
     import_source,
+    preview_corrections,
     run_analysis,
     run_corrections,
     run_learning,
@@ -103,7 +104,7 @@ const val=id=>document.getElementById(id).value;
 const act=path=>run(()=>api(path,{}));
 const importDocs=()=>run(()=>api('/api/import',{source:val('source'),role:val('role')}));
 const mapRef=()=>run(()=>api('/api/map',{old:val('oldRef'),new:val('newRef')}));
-const applyFixes=()=>run(()=>api('/api/apply',{output:val('output')}));
+async function applyFixes(){await run(async()=>{const preview=await api('/api/preview',{});if(!preview.items.length)return {message:'Подтвержденных замен для DOCX-документов не найдено'};const docs=preview.items.slice(0,10).map(x=>`- ${x.title}: ${x.replacement_count} замен`).join('\\n');if(!confirm(`Будут созданы исправленные копии. Исходные документы не изменяются.\\n\\nДокументов: ${preview.documents}\\nЗамен: ${preview.replacements}\\n\\n${docs}\\n\\nПрименить эти изменения?`))return {message:'Изменения отменены пользователем'};return api('/api/apply',{output:val('output'),confirmed:true});});}
 const toggleRule=id=>run(()=>api('/api/toggle-rule',{id}));
 async function search(){await run(async()=>{const x=await api('/api/search',{query:val('query')});document.getElementById('searchResults').innerHTML=x.results.map(r=>`<p><b>${esc(r.title)}</b><br>${esc(r.text)}</p>`).join('');return {найдено:x.results.length};});}
 refresh();
@@ -180,9 +181,13 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/map":
                 add_mapping(self.db, payload["old"], payload["new"])
                 result = {"mapping": f"{payload['old']} -> {payload['new']}"}
+            elif path == "/api/preview":
+                result = preview_corrections(self.db)
             elif path == "/api/apply":
                 result = run_corrections(
-                    self.db, Path(payload["output"]).expanduser()
+                    self.db,
+                    Path(payload["output"]).expanduser(),
+                    confirmed=bool(payload.get("confirmed")),
                 )
             elif path == "/api/toggle-rule":
                 self.db.execute(

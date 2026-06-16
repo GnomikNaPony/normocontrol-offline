@@ -89,6 +89,7 @@ python -m normocontrol.cli --db data/base.sqlite3 apply corrected --confirm
 Подробнее: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) и
 [docs/MODELS.md](docs/MODELS.md). Первичная выжимка требований из загруженных
 РУ: [docs/RU_REQUIREMENTS.md](docs/RU_REQUIREMENTS.md).
+Кроссплатформенная проверка: [docs/CROSS_PLATFORM.md](docs/CROSS_PLATFORM.md).
 
 ## Ограничения прототипа
 

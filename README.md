@@ -13,6 +13,8 @@
   - архитектура.
 - [normocontrol_offline/docs/MODELS.md](normocontrol_offline/docs/MODELS.md) -
   выбор локальных моделей.
+- [normocontrol_offline/docs/CROSS_PLATFORM.md](normocontrol_offline/docs/CROSS_PLATFORM.md)
+  - проверка работы на macOS/Windows/Linux.
 
 Быстрый запуск:
 
