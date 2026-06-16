@@ -87,6 +87,24 @@ class CoreTests(unittest.TestCase):
             self.assertTrue(report.exists())
             self.assertIn("ГОСТ Р 2.105-2025", report.read_text(encoding="utf-8"))
 
+    def test_import_updates_moved_duplicate_by_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "old" / "sample.docx"
+            second = root / "new" / "sample.docx"
+            first.parent.mkdir()
+            second.parent.mkdir()
+            make_docx(first)
+            make_docx(second)
+            db = Database(root / "base.sqlite3")
+
+            import_source(db, first, "document")
+            import_source(db, second, "document")
+            documents = db.rows("SELECT path FROM documents")
+
+        self.assertEqual(len(documents), 1)
+        self.assertEqual(Path(documents[0]["path"]).parent.name, "new")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,13 @@
+prompt,run,seconds,term_hits,term_total,score,line_count,char_count
+checks_ru,1,4.587,0,5,0.0,0,0
+checks_ru,2,4.101,0,5,0.0,0,0
+checks_ru,3,4.096,0,5,0.0,0,0
+checks_ru,4,4.587,0,5,0.0,0,0
+reference_update,1,4.605,0,4,0.0,0,0
+reference_update,2,4.093,0,4,0.0,0,0
+reference_update,3,4.088,0,4,0.0,0,0
+reference_update,4,4.085,0,4,0.0,0,0
+report_requirements,1,4.601,0,5,0.0,0,0
+report_requirements,2,4.624,0,5,0.0,0,0
+report_requirements,3,4.132,0,5,0.0,0,0
+report_requirements,4,4.132,0,5,0.0,0,0

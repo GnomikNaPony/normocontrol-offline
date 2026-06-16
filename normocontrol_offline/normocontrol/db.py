@@ -123,34 +123,65 @@ class Database:
         status = "error" if error else "ready"
         text = extracted.text if extracted else ""
         metadata = extracted.metadata if extracted else {}
+        resolved_path = str(path.resolve())
         with self.connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO documents
-                    (path, role, title, extension, sha256, mtime, text, metadata_json, status, error)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(path) DO UPDATE SET
-                    role=excluded.role, title=excluded.title, extension=excluded.extension,
-                    sha256=excluded.sha256, mtime=excluded.mtime, text=excluded.text,
-                    metadata_json=excluded.metadata_json, status=excluded.status,
-                    error=excluded.error, imported_at=CURRENT_TIMESTAMP
-                """,
-                (
-                    str(path.resolve()),
-                    role,
-                    path.name,
-                    path.suffix.lower(),
-                    sha256,
-                    path.stat().st_mtime,
-                    text,
-                    json.dumps(metadata, ensure_ascii=False),
-                    status,
-                    error,
-                ),
-            )
-            document_id = connection.execute(
-                "SELECT id FROM documents WHERE path = ?", (str(path.resolve()),)
-            ).fetchone()["id"]
+            existing = connection.execute(
+                "SELECT id FROM documents WHERE path = ?", (resolved_path,)
+            ).fetchone()
+            if existing is None:
+                existing = connection.execute(
+                    """
+                    SELECT id FROM documents
+                    WHERE sha256 = ? AND role = ? AND title = ? AND path != ?
+                    ORDER BY imported_at DESC LIMIT 1
+                    """,
+                    (sha256, role, path.name, resolved_path),
+                ).fetchone()
+            if existing is not None:
+                document_id = int(existing["id"])
+                connection.execute(
+                    """
+                    UPDATE documents SET
+                        path = ?, role = ?, title = ?, extension = ?, sha256 = ?,
+                        mtime = ?, text = ?, metadata_json = ?, status = ?,
+                        error = ?, imported_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (
+                        resolved_path,
+                        role,
+                        path.name,
+                        path.suffix.lower(),
+                        sha256,
+                        path.stat().st_mtime,
+                        text,
+                        json.dumps(metadata, ensure_ascii=False),
+                        status,
+                        error,
+                        document_id,
+                    ),
+                )
+            else:
+                connection.execute(
+                    """
+                    INSERT INTO documents
+                        (path, role, title, extension, sha256, mtime, text, metadata_json, status, error)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        resolved_path,
+                        role,
+                        path.name,
+                        path.suffix.lower(),
+                        sha256,
+                        path.stat().st_mtime,
+                        text,
+                        json.dumps(metadata, ensure_ascii=False),
+                        status,
+                        error,
+                    ),
+                )
+                document_id = int(connection.execute("SELECT last_insert_rowid()").fetchone()[0])
             for table in ("paragraphs", "annotations", "refs", "findings"):
                 connection.execute(f"DELETE FROM {table} WHERE document_id = ?", (document_id,))
             connection.execute(
@@ -249,4 +280,3 @@ class Database:
                     "SELECT COUNT(*) FROM learned_rules"
                 ).fetchone()[0],
             }
-
