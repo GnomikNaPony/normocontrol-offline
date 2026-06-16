@@ -15,6 +15,7 @@ from .service import (
     preview_corrections,
     run_analysis,
     run_corrections,
+    run_learning,
 )
 
 
@@ -93,6 +94,7 @@ class App(ctk.CTk):
         actions.pack(fill="x", padx=32, pady=(0, 20))
         buttons = (
             ("Добавить материалы", self.add_materials, "#E7ECE8", "#16221C"),
+            ("Обучить", self.learn, "#E7ECE8", "#16221C"),
             ("Проверить базу", self.analyze, "#1E5942", "#FFFFFF"),
             ("Обновить ссылку", self.map_reference, "#E7ECE8", "#16221C"),
             ("Исправленные копии", self.apply, "#E7ECE8", "#16221C"),
@@ -252,6 +254,9 @@ class App(ctk.CTk):
 
     def analyze(self) -> None:
         self.run_task("Проверка базы", lambda: {"findings": run_analysis(self.db)})
+
+    def learn(self) -> None:
+        self.run_task("Обучение", lambda: run_learning(self.db))
 
     def map_reference(self) -> None:
         old = simpledialog.askstring("Обновить ссылку", "Старое обозначение:")

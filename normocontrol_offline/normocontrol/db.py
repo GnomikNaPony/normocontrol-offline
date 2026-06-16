@@ -280,3 +280,77 @@ class Database:
                     "SELECT COUNT(*) FROM learned_rules"
                 ).fetchone()[0],
             }
+
+    def compact_examples(self) -> dict[str, int | bool]:
+        with self.connect() as connection:
+            document_ids = [
+                int(row["id"])
+                for row in connection.execute(
+                    "SELECT id FROM documents WHERE role = 'example'"
+                ).fetchall()
+            ]
+            if not document_ids:
+                return {
+                    "example_documents": 0,
+                    "paragraphs_removed": 0,
+                    "annotations_removed": 0,
+                    "references_removed": 0,
+                    "findings_removed": 0,
+                    "vacuum_required": False,
+                }
+            placeholders = ",".join("?" for _ in document_ids)
+            removed = {
+                "example_documents": len(document_ids),
+                "paragraphs_removed": connection.execute(
+                    f"SELECT COUNT(*) FROM paragraphs WHERE document_id IN ({placeholders})",
+                    document_ids,
+                ).fetchone()[0],
+                "annotations_removed": connection.execute(
+                    f"SELECT COUNT(*) FROM annotations WHERE document_id IN ({placeholders})",
+                    document_ids,
+                ).fetchone()[0],
+                "references_removed": connection.execute(
+                    f"SELECT COUNT(*) FROM refs WHERE document_id IN ({placeholders})",
+                    document_ids,
+                ).fetchone()[0],
+                "findings_removed": connection.execute(
+                    f"SELECT COUNT(*) FROM findings WHERE document_id IN ({placeholders})",
+                    document_ids,
+                ).fetchone()[0],
+                "vacuum_required": True,
+            }
+            for table in ("paragraphs", "annotations", "refs", "findings"):
+                connection.execute(
+                    f"DELETE FROM {table} WHERE document_id IN ({placeholders})",
+                    document_ids,
+                )
+            connection.execute(
+                f"DELETE FROM paragraph_fts WHERE document_id IN ({placeholders})",
+                document_ids,
+            )
+            for document_id in document_ids:
+                row = connection.execute(
+                    "SELECT metadata_json FROM documents WHERE id = ?", (document_id,)
+                ).fetchone()
+                try:
+                    metadata = json.loads(row["metadata_json"] or "{}")
+                except json.JSONDecodeError:
+                    metadata = {}
+                metadata["compacted_after_learning"] = True
+                connection.execute(
+                    """
+                    UPDATE documents
+                    SET text = '', metadata_json = ?
+                    WHERE id = ?
+                    """,
+                    (json.dumps(metadata, ensure_ascii=False), document_id),
+                )
+            return removed
+
+    def vacuum(self) -> None:
+        connection = sqlite3.connect(self.path)
+        try:
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            connection.execute("VACUUM")
+        finally:
+            connection.close()

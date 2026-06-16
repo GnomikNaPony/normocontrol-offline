@@ -7,6 +7,7 @@ from pathlib import Path
 from .db import Database
 from .service import (
     add_mapping,
+    cleanup_training_data,
     import_source,
     preview_corrections,
     run_analysis,
@@ -31,7 +32,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser("analyze")
-    subparsers.add_parser("learn")
+    learn_parser = subparsers.add_parser("learn")
+    learn_parser.add_argument(
+        "--keep-examples",
+        action="store_true",
+        help="Не очищать текст примеров из базы после обучения",
+    )
+    subparsers.add_parser("cleanup")
     subparsers.add_parser("stats")
 
     mapping_parser = subparsers.add_parser("map")
@@ -66,7 +73,9 @@ def main() -> None:
     elif arguments.command == "analyze":
         result = {"findings": run_analysis(db)}
     elif arguments.command == "learn":
-        result = run_learning(db)
+        result = run_learning(db, compact_examples=not arguments.keep_examples)
+    elif arguments.command == "cleanup":
+        result = cleanup_training_data(db)
     elif arguments.command == "stats":
         result = db.stats()
     elif arguments.command == "map":

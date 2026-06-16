@@ -62,8 +62,17 @@ def run_analysis(db: Database) -> int:
     return analyze_all(db)
 
 
-def run_learning(db: Database) -> dict[str, int]:
-    return learn_from_examples(db)
+def run_learning(db: Database, compact_examples: bool = True) -> dict:
+    result = learn_from_examples(db)
+    if compact_examples:
+        result["cleanup"] = cleanup_training_data(db)
+    return result
+
+
+def cleanup_training_data(db: Database) -> dict:
+    cleanup = db.compact_examples()
+    db.vacuum()
+    return cleanup
 
 
 def preview_corrections(db: Database) -> dict:

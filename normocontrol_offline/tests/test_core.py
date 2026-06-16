@@ -10,7 +10,7 @@ from normocontrol.corrections import replace_in_docx
 from normocontrol.db import Database
 from normocontrol.extractors import extract_document
 from normocontrol.references import find_references
-from normocontrol.service import add_mapping, import_source
+from normocontrol.service import add_mapping, import_source, run_learning
 
 
 DOCUMENT_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -33,6 +33,23 @@ def make_docx(path: Path) -> None:
     with ZipFile(path, "w") as archive:
         archive.writestr("[Content_Types].xml", CONTENT_TYPES)
         archive.writestr("word/document.xml", DOCUMENT_XML)
+
+
+def make_docx_with_text(path: Path, *paragraphs: str) -> None:
+    body = "\n".join(
+        f"    <w:p><w:r><w:t>{paragraph}</w:t></w:r></w:p>"
+        for paragraph in paragraphs
+    )
+    document_xml = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+{body}
+  </w:body>
+</w:document>
+"""
+    with ZipFile(path, "w") as archive:
+        archive.writestr("[Content_Types].xml", CONTENT_TYPES)
+        archive.writestr("word/document.xml", document_xml)
 
 
 class CoreTests(unittest.TestCase):
@@ -104,6 +121,33 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(len(documents), 1)
         self.assertEqual(Path(documents[0]["path"]).parent.name, "new")
+
+    def test_learning_compacts_example_payloads_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            before = root / "ИЭ.1 пересмотр 2025.docx"
+            after = root / "ИЭ.1 пересмотр 2026.docx"
+            make_docx_with_text(before, "Проверить старую ссылку ГОСТ Р 2.105-2019")
+            make_docx_with_text(after, "Проверить новую ссылку ГОСТ Р 2.105-2025")
+            db = Database(root / "base.sqlite3")
+            import_source(db, before, "example")
+            import_source(db, after, "example")
+
+            result = run_learning(db)
+            paragraphs = db.rows(
+                """
+                SELECT COUNT(*) AS count
+                FROM paragraphs
+                JOIN documents ON documents.id = paragraphs.document_id
+                WHERE documents.role = 'example'
+                """
+            )[0]["count"]
+            rules = db.rows("SELECT COUNT(*) AS count FROM learned_rules")[0]["count"]
+
+        self.assertEqual(result["pairs"], 1)
+        self.assertGreater(rules, 0)
+        self.assertEqual(paragraphs, 0)
+        self.assertGreater(result["cleanup"]["paragraphs_removed"], 0)
 
 
 if __name__ == "__main__":
