@@ -149,6 +149,8 @@ cd "/Users/aleksandrkiko/Desktop/normocontrol-offline/normocontrol_offline"
 ./start.sh
 ```
 
+На macOS можно также открыть `start.command` двойным кликом.
+
 Windows:
 
 ```powershell

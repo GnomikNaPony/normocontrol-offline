@@ -44,7 +44,10 @@ python -m pip install -r requirements.txt
 ```
 
 На macOS/Linux удобнее запускать через `./start.sh`: скрипт берет Python из
-локального `.venv` и не зависит от наличия системной команды `python`.
+локального `.venv`, не зависит от наличия системной команды `python` и включает
+macOS-обход для ошибки CoreFoundation `You MUST exec()`.
+
+На macOS можно также открыть приложение двойным кликом по `start.command`.
 
 На Windows активация окружения:
 

@@ -10,6 +10,9 @@ cd ~/Desktop/normocontrol-offline/normocontrol_offline
 ./start.sh
 ```
 
+На macOS можно запускать и двойным кликом по файлу
+`normocontrol_offline/start.command`.
+
 ## Что теперь умеет программа
 
 - Работает локально в собственном desktop-окне, без браузера и без интернета.
