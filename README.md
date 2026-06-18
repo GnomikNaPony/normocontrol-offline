@@ -7,6 +7,7 @@
 
 ```bash
 cd ~/Desktop/normocontrol-offline/normocontrol_offline
+./start.sh
 ```
 
 ## Что теперь умеет программа
@@ -68,5 +69,5 @@ cd normocontrol_offline
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-python run.py
+./start.sh
 ```

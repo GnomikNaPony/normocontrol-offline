@@ -40,8 +40,11 @@ cd normocontrol_offline
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-python run.py
+./start.sh
 ```
+
+На macOS/Linux удобнее запускать через `./start.sh`: скрипт берет Python из
+локального `.venv` и не зависит от наличия системной команды `python`.
 
 На Windows активация окружения:
 
