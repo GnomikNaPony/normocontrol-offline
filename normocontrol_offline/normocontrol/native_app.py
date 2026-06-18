@@ -11,7 +11,7 @@ from .config import DEFAULT_DB
 from .db import Database
 from .service import (
     add_mapping,
-    import_source,
+    import_source_isolated,
     preview_corrections,
     run_analysis,
     run_corrections,
@@ -384,7 +384,7 @@ class App(ctk.CTk):
         def task():
             total = {"imported": 0, "errors": 0}
             for path in paths:
-                result = import_source(self.db, Path(path), role)
+                result = import_source_isolated(self.db, Path(path), role)
                 total["imported"] += result["imported"]
                 total["errors"] += result["errors"]
             return total

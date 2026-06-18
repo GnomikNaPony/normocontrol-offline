@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 from .analyzer import analyze_all
 from .corrections import apply_reference_mappings, preview_reference_mappings
@@ -40,6 +44,51 @@ def import_source(db: Database, source: Path, role: str) -> dict[str, int]:
             db.upsert_document(path, role, digest, None, str(exc))
             errors += 1
     return {"imported": imported, "errors": errors}
+
+
+def import_source_isolated(db: Database, source: Path, role: str) -> dict[str, int]:
+    """Run import in a clean Python process.
+
+    On macOS the GUI process has Tk/CoreFoundation loaded. OCR and legacy
+    converters may start subprocesses while import is running, which can trigger
+    Apple's fork-safety abort. Keeping extraction in a non-GUI helper process
+    avoids that class of crashes and leaves the desktop window responsive.
+    """
+    if os.environ.get("NORMOCONTROL_IMPORT_WORKER") == "1":
+        return import_source(db, source, role)
+
+    environment = os.environ.copy()
+    environment["NORMOCONTROL_IMPORT_WORKER"] = "1"
+    if sys.platform == "darwin":
+        environment["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
+
+    command = [
+        sys.executable,
+        "-m",
+        "normocontrol.cli",
+        "--db",
+        str(db.path),
+        "import",
+        str(source),
+        "--role",
+        role,
+    ]
+    result = subprocess.run(
+        command,
+        cwd=Path(__file__).resolve().parents[1],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        error = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(error or f"Импорт завершился с кодом {result.returncode}")
+    output = result.stdout.strip()
+    start = output.find("{")
+    if start < 0:
+        raise RuntimeError(f"Импорт не вернул JSON-результат: {output}")
+    return json.loads(output[start:])
 
 
 def add_mapping(db: Database, old_value: str, new_value: str) -> None:

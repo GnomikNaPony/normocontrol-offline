@@ -10,7 +10,12 @@ from normocontrol.corrections import replace_in_docx
 from normocontrol.db import Database
 from normocontrol.extractors import extract_document
 from normocontrol.references import find_references
-from normocontrol.service import add_mapping, import_source, run_learning
+from normocontrol.service import (
+    add_mapping,
+    import_source,
+    import_source_isolated,
+    run_learning,
+)
 
 
 DOCUMENT_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -150,6 +155,20 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(len(documents), 1)
         self.assertEqual(Path(documents[0]["path"]).parent.name, "new")
+
+    def test_isolated_import_uses_helper_process(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.docx"
+            make_docx(source)
+            db = Database(root / "base.sqlite3")
+
+            result = import_source_isolated(db, source, "standard")
+            documents = db.rows("SELECT role, title FROM documents")
+
+        self.assertEqual(result, {"imported": 1, "errors": 0})
+        self.assertEqual(len(documents), 1)
+        self.assertEqual(documents[0]["role"], "standard")
 
     def test_learning_compacts_example_payloads_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
