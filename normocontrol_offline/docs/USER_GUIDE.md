@@ -145,7 +145,7 @@
 macOS/Linux:
 
 ```bash
-cd "/Users/aleksandrkiko/Desktop/Нормоконтроль Offline/normocontrol_offline"
+cd "/Users/aleksandrkiko/Desktop/normocontrol-offline/normocontrol_offline"
 source .venv/bin/activate
 python run.py
 ```
